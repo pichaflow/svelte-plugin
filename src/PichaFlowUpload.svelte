@@ -4,6 +4,7 @@
 
   export let apiKey: string;
   export let baseUrl: string | undefined = undefined;
+  export let useSecure: boolean = false;
   export let tags: string[] | undefined = undefined;
 
   const dispatch = createEventDispatcher();
@@ -19,13 +20,18 @@
     progress = 0;
 
     try {
-      const response = await client.upload(file, {
+      const options = {
         tags,
-        onProgress: (p) => {
+        onProgress: (p: number) => {
           progress = p;
           dispatch('progress', p);
         }
-      });
+      };
+      
+      const response = useSecure 
+        ? await client.secureUpload(file, options)
+        : await client.upload(file, options);
+        
       dispatch('success', response);
     } catch (err) {
       dispatch('error', err);
