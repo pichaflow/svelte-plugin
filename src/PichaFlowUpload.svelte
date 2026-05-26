@@ -1,49 +1,112 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import { PichaFlowClient, type UploadResponse } from '@pichaflow/sdk';
+  import { PichaFlowClient, type UploadResponse, optimizeImageForUpload } from '@pichaflow/sdk';
 
   export let apiKey: string;
   export let baseUrl: string | undefined = undefined;
+  export let engineUrl: string | undefined = undefined;
+  export let tenantId: string | undefined = undefined;
   export let useSecure: boolean = false;
   export let tags: string[] | undefined = undefined;
 
   const dispatch = createEventDispatcher();
   let isDragging = false;
-  let isUploading = false;
-  let progress = 0;
+  
+  type UploadTask = {
+    id: string;
+    file: File;
+    progress: number;
+    status: 'pending' | 'uploading' | 'success' | 'error';
+    error?: string;
+    response?: UploadResponse;
+  };
+  
+  let tasks: UploadTask[] = [];
 
-  const client = new PichaFlowClient({ apiKey, baseUrl });
+  const client = new PichaFlowClient({ apiKey, baseUrl, engineUrl, tenantId });
 
-  async function handleFile(file: File) {
-    if (isUploading) return;
-    isUploading = true;
-    progress = 0;
+  async function handleFiles(files: FileList | File[]) {
+    const fileArray = Array.from(files) as File[];
+    if (fileArray.length === 0) return;
 
-    try {
-      const options = {
-        tags,
-        onProgress: (p: number) => {
-          progress = p;
-          dispatch('progress', p);
+    const imageFiles = fileArray.filter(f => f.type.startsWith('image/'));
+    if (imageFiles.length === 0) {
+      dispatch('error', new Error('Only image files are supported.'));
+      return;
+    }
+
+    const previewTasks: UploadTask[] = imageFiles.map(file => ({
+      id: crypto.randomUUID(),
+      file,
+      progress: 0,
+      status: 'pending' as const
+    }));
+
+    tasks = [...tasks, ...previewTasks];
+
+    const optimizedTasks = await Promise.all(
+      previewTasks.map(async (t) => {
+        const optimizedFile = await optimizeImageForUpload(t.file);
+        return { ...t, file: optimizedFile };
+      })
+    );
+
+    let completedCount = 0;
+    const successfulResponses: UploadResponse[] = [];
+
+    await Promise.all(optimizedTasks.map(async (rawTask) => {
+      const updateTask = (updates: Partial<UploadTask>) => {
+        const index = tasks.findIndex(t => t.id === rawTask.id);
+        if (index !== -1) {
+          tasks[index] = { ...tasks[index], ...updates };
+          tasks = [...tasks]; // trigger reactivity
         }
       };
-      
-      const response = useSecure 
-        ? await client.secureUpload(file, options)
-        : await client.upload(file, options);
+
+      updateTask({ status: 'uploading' });
+
+      try {
+        const options = {
+          tags,
+          onProgress: (p: number) => {
+            updateTask({ progress: p });
+            dispatch('progress', p);
+          }
+        };
         
-      dispatch('success', response);
-    } catch (err) {
-      dispatch('error', err);
-    } finally {
-      isUploading = false;
-    }
+        const response = useSecure 
+          ? await client.secureUpload(rawTask.file, options)
+          : await client.upload(rawTask.file, options);
+          
+        updateTask({ status: 'success', progress: 100, response });
+        successfulResponses.push(response);
+        dispatch('success', response);
+      } catch (err: any) {
+        updateTask({ status: 'error', error: err.message || 'Upload failed' });
+        dispatch('error', err);
+      } finally {
+        completedCount++;
+        if (completedCount === optimizedTasks.length) {
+          if (successfulResponses.length > 0) {
+            dispatch('success-all', successfulResponses);
+          }
+        }
+      }
+    }));
   }
 
   function onDrop(e: DragEvent) {
     isDragging = false;
-    const file = e.dataTransfer?.files[0];
-    if (file) handleFile(file);
+    const files = e.dataTransfer?.files;
+    if (files && files.length) handleFiles(files);
+  }
+
+  function onFileSelect(e: Event) {
+    const input = e.target as HTMLInputElement;
+    if (input.files && input.files.length) {
+      handleFiles(input.files);
+    }
+    input.value = ''; // Reset input
   }
 </script>
 
@@ -54,15 +117,46 @@
   on:dragleave|preventDefault={() => isDragging = false}
   on:drop|preventDefault={onDrop}
 >
-  {#if !isUploading}
-    <p>
-      Drag & drop or <label class="link">browse<input type="file" on:change={(e) => e.target.files[0] && handleFile(e.target.files[0])} hidden /></label>
-    </p>
-  {:else}
-    <div class="progress-bar">
-      <div class="progress-fill" style="width: {progress}%"></div>
+  {#if tasks.length === 0}
+    <div class="picha-upload-content">
+      <slot name="icon">
+        <svg class="picha-upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+      </slot>
+      <p class="picha-upload-text">
+        Drag & drop or <label class="picha-upload-link">browse<input type="file" accept="image/*" multiple on:change={onFileSelect} hidden /></label>
+      </p>
     </div>
-    <p class="status">Uploading... {progress}%</p>
+  {:else}
+    <div class="picha-uploading-list">
+      {#each tasks as task (task.id)}
+        <div class="picha-task-item">
+          <div class="picha-task-info">
+            <span class="picha-file-name">{task.file.name}</span>
+            <span class="picha-status-text {task.status}">
+              {#if task.status === 'success'}
+                Uploaded
+              {:else if task.status === 'error'}
+                Failed
+              {:else}
+                {task.progress}%
+              {/if}
+            </span>
+          </div>
+          <div class="picha-progress-bar">
+            <div class="picha-progress-fill {task.status}" style="width: {task.progress}%"></div>
+          </div>
+          {#if task.error}
+            <p class="picha-error-text">{task.error}</p>
+          {/if}
+        </div>
+      {/each}
+      
+      <div class="picha-add-more">
+        <p class="picha-upload-text">
+          <label class="picha-upload-link">Upload more files<input type="file" accept="image/*" multiple on:change={onFileSelect} hidden /></label>
+        </p>
+      </div>
+    </div>
   {/if}
 </div>
 
@@ -71,13 +165,71 @@
     border: 2px dashed #e2e8f0;
     border-radius: 0.75rem;
     padding: 2rem;
-    text-align: center;
+    transition: all 0.2s ease;
     background: #f8fafc;
-    cursor: pointer;
   }
-  .is-dragging { background: #eff6ff; border-color: #3b82f6; }
-  .link { color: #3b82f6; font-weight: 600; cursor: pointer; }
-  .progress-bar { background: #e2e8f0; height: 0.5rem; border-radius: 999px; overflow: hidden; }
-  .progress-fill { background: #3b82f6; height: 100%; transition: width 0.1s ease; }
-  .status { font-size: 0.75rem; color: #64748b; margin-top: 0.5rem; }
+  .picha-upload-zone.is-dragging {
+    border-color: #3b82f6;
+    background: #eff6ff;
+  }
+  .picha-upload-content {
+    text-align: center;
+  }
+  .picha-upload-icon { width: 2rem; height: 2rem; color: #94a3b8; margin: 0 auto 1rem; display: block; }
+  .picha-upload-text { color: #64748b; font-size: 0.875rem; margin: 0; }
+  .picha-upload-link { color: #3b82f6; font-weight: 600; cursor: pointer; }
+  
+  .picha-uploading-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .picha-task-item {
+    background: white;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    border: 1px solid #f1f5f9;
+  }
+  .picha-task-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  .picha-file-name {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: #334155;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70%;
+  }
+  .picha-status-text {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #64748b;
+  }
+  .picha-status-text.success { color: #10b981; }
+  .picha-status-text.error { color: #ef4444; }
+  
+  .picha-progress-bar { background: #e2e8f0; height: 0.5rem; border-radius: 999px; overflow: hidden; }
+  .picha-progress-fill { background: #3b82f6; height: 100%; transition: width 0.1s ease; }
+  .picha-progress-fill.success { background: #10b981; }
+  .picha-progress-fill.error { background: #ef4444; }
+  
+  .picha-error-text {
+    margin-top: 0.25rem;
+    font-size: 0.75rem;
+    color: #ef4444;
+  }
+  .picha-add-more { text-align: center; margin-top: 1.5rem; }
+
+  @media (prefers-color-scheme: dark) {
+    .picha-upload-zone { background: #0f172a; border-color: #1e293b; }
+    .picha-task-item { background: #1e293b; border-color: #334155; }
+    .picha-file-name { color: #f8fafc; }
+    .picha-progress-bar { background: #334155; }
+  }
 </style>
