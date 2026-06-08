@@ -4,7 +4,8 @@
 
   export let apiKey: string;
   export let baseUrl: string | undefined = undefined;
-  export let engineUrl: string | undefined = undefined;
+  export let uploadUrl: string | undefined = undefined;
+  export let fetchUrl: string | undefined = undefined;
   export let tenantId: string | undefined = undefined;
   export let useSecure: boolean = false;
   export let tags: string[] | undefined = undefined;
@@ -23,7 +24,7 @@
   
   let tasks: UploadTask[] = [];
 
-  const client = new PichaFlowClient({ apiKey, baseUrl, engineUrl, tenantId });
+  const client = new PichaFlowClient({ apiKey, baseUrl, uploadUrl, fetchUrl, tenantId });
 
   async function handleFiles(files: FileList | File[]) {
     const fileArray = Array.from(files) as File[];
