@@ -87,6 +87,7 @@
 
           const options = {
             tags,
+            customUploadEndpoint,
             onProgress: (p: number) => {
               updateTask({ progress: p });
               dispatch("progress", p);
