@@ -1,10 +1,7 @@
-import PichaFlowUpload from '../src/PichaFlowUpload.svelte';
+import App from './App.svelte';
 
-const app = new PichaFlowUpload({
+const app = new App({
   target: document.getElementById('app')!,
-  props: {
-    apiKey: 'sandbox_key',
-  }
 });
 
 export default app;
