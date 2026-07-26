@@ -5,7 +5,9 @@ import { resolve } from 'path';
 
 export default defineConfig({
   plugins: [
-    svelte(),
+    svelte({
+      emitCss: false,
+    }),
     dts({
       insertTypesEntry: true,
     }),

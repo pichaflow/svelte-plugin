@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6
+
+### Added
+- Configured Svelte package to compile styles inline (`emitCss: false`) for zero-config bundler usage.
+- Exposed package `exports` mapping for `./style.css` stylesheet path.
+
 ## 0.1.5
 
 ### Improved

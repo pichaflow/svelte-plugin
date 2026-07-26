@@ -1,11 +1,29 @@
 {
   "name": "@pichaflow/svelte",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "type": "module",
   "description": "PichaFlow SDK for Svelte - Edge-native media transformations.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.js"
+    },
+    "./style.css": "./dist/index.css"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.ts",
+        "import": "./dist/index.mjs",
+        "default": "./dist/index.js"
+      },
+      "./style.css": "./dist/index.css"
+    }
+  },
   "files": [
     "dist"
   ],
