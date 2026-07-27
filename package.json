@@ -1,6 +1,6 @@
 {
   "name": "@pichaflow/svelte",
-  "version": "0.1.6",
+  "version": "0.2.0",
   "type": "module",
   "description": "PichaFlow SDK for Svelte - Edge-native media transformations.",
   "main": "dist/index.js",
@@ -42,7 +42,7 @@
     "svelte": ">=4"
   },
   "dependencies": {
-    "@pichaflow/sdk": "workspace:*"
+    "@pichaflow/sdk": "workspace:^0.2.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",

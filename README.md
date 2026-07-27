@@ -66,17 +66,21 @@ Instead, PichaFlow uses an HMAC Handshake proxy flow:
 3. Your backend securely holds the Secret Key, generates a temporary, 60-second HMAC token, and returns it.
 4. The component uses that token to upload the massive file directly to the PichaFlow Edge Network—meaning the large file never touches your backend infrastructure, saving you bandwidth and server costs.
 
+> [!CAUTION]
+> **Authentication Check Required**: You must secure your backend `signatureUrl` endpoint with appropriate session or token authentication middleware. If this route is left public and unauthenticated, any user or bot can request valid signatures to upload files directly to your account, risking billing spikes or bucket abuse.
+
 ### Example Backend Route (SvelteKit Endpoint)
 If your `signatureUrl` is `/api/sign-upload`, your SvelteKit route might look like this:
 
 ```typescript
 // src/routes/api/sign-upload/+server.ts
-import { json } from '@sveltejs/kit';
+import { json, error } from '@sveltejs/kit';
 import crypto from 'crypto';
 import { env } from '$env/dynamic/private';
 
-export async function POST({ request }) {
-  // 1. Verify user is logged in (optional but recommended)
+export async function POST({ request, locals }) {
+  // 1. MUST verify user is authenticated here
+  // if (!locals.user) throw error(401, 'Unauthorized');
   
   // 2. Generate HMAC signature using your SECRET key
   const secret = env.PICHAFLOW_SECRET_KEY;
