@@ -214,11 +214,14 @@
 <div class="picha-container">
   <div
     class="picha-upload-zone"
+    role="button"
+    tabindex="0"
     class:is-dragging={isDragging}
     on:dragover|preventDefault={() => (isDragging = true)}
     on:dragleave|preventDefault={() => (isDragging = false)}
     on:drop|preventDefault={onDrop}
     on:click={() => fileInput.click()}
+    on:keydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } }}
   >
     <div class="picha-upload-circle">
       <slot name="icon">
